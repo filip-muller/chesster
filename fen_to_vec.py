@@ -12,8 +12,9 @@ ROOK = 4
 QUEEN = 5
 KING = 6
 
-WHITE = 0
-BLACK = 100
+WHITE = 1
+BLACK = -1
+NEUTRAL = 0  # for empty squares
 
 CANNOT_CASTLE = 0
 CAN_CASTLE = 1
@@ -33,7 +34,7 @@ def create_piece_conversion_dict():
         conversion[char] = [val, WHITE]
         # lowercase used for black characters in FEN
         conversion[char.lower()] = [val, BLACK]
-    conversion["_"] = [EMPTY, WHITE]
+    conversion["_"] = [EMPTY, NEUTRAL]
     return conversion
 
 
@@ -54,12 +55,12 @@ def fen_to_vec(fen):
     For example, black bishop is 3 + 100 = 103
     Output:
 
-    items 0-63 - pieces by row, starting in row 8 - h1, g1, ..., h2, ..., a8
-    NEW: items 0-127 - pieces by row, first item pieces type, second color, white for empty
-    65 - white kingside castle
-    66 - white queenside castle
-    67 - black kingside castle
-    68 - white queenside castle
+    items 0-127 - pieces by row, first item pieces type, second color, white for empty
+    128 - color to move
+    129 - white kingside castle
+    130 - white queenside castle
+    131 - black kingside castle
+    132 - white queenside castle
     """
     pieces_fen = fen.split(" ")[0]
     # print(pieces_fen)
@@ -75,9 +76,17 @@ def fen_to_vec(fen):
     for ch in pieces_fen:
         pieces_vec.extend(conversion[ch])
 
+    color_to_move_fen = fen.split(" ")[1].strip()
+    if color_to_move_fen == "w":
+        color_to_move_vec = [WHITE]
+    elif color_to_move_fen == "b":
+        color_to_move_vec = [BLACK]
+    else:
+        raise ValueError(f"Invalid color to move in fen: '{color_to_move_fen}'")
+
     castling_fen = fen.split(" ")[2]
     castling_vec = castling_fen_to_vec(castling_fen)
 
-    res = pieces_vec + castling_vec
+    res = pieces_vec + color_to_move_vec + castling_vec
 
     return torch.tensor(res, dtype=torch.float)

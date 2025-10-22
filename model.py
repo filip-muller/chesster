@@ -1,9 +1,11 @@
 import chess
+import torch
 from torch import nn
+from fen_to_vec import fen_to_vec
 
 
-class PositionEvaluator(nn.Module):
-    def __init__(self, input_size=132):
+class NNModel(nn.Module):
+    def __init__(self, input_size=133):
         super().__init__()
         layer_sizes = [256, 512, 128]
         previous_size = input_size
@@ -25,12 +27,42 @@ class PositionEvaluator(nn.Module):
         return res
 
 
-def evaluate_position(fen):
-    return evaluate_position_piece_value(fen)
+class PositionEvaluator:
+    def __init__(self, weights_path=None):
+        if weights_path is None:
+            weights_path = "weights/full_pieces.pth"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = NNModel().to(self.device)
+        self.model.eval()
+        self.model.load_state_dict(torch.load(weights_path, map_location=self.device))
+
+    def evaluate_position(self, fen):
+        return self.evaluate_positions([fen])[0].item()
+
+    def evaluate_positions(self, fens):
+        """Uses batching, use for better performance"""
+        batch_size = 2048
+        res = []
+        for beg in range(0, len(fens), batch_size):
+            vec = torch.stack([fen_to_vec(fen) for fen in fens[beg:beg + 2048]]).to(self.device)
+            with torch.no_grad():
+                model_evals = self.model(vec)
+            res.append(model_evals.flatten().tolist())
+        return res
 
 
-def min_max_eval(fen, depth=None):
-    pass
+
+def min_max_eval(evaluator, fen, depth=None):
+    if depth is None:
+        depth = 5
+    board = chess.Board(fen)
+    moves = board.legal_moves
+
+    for move in moves:
+        new_board = board.copy()
+        new_board.push(move)
+
+
 
 def evaluate_position_piece_value(fen):
     """
