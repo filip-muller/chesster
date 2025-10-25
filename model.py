@@ -39,29 +39,75 @@ class PositionEvaluator:
     def evaluate_position(self, fen):
         return self.evaluate_positions([fen])[0].item()
 
-    def evaluate_positions(self, fens):
+    def evaluate_positions(self, fens, batch_size=2048):
         """Uses batching, use for better performance"""
-        batch_size = 2048
         res = []
         for beg in range(0, len(fens), batch_size):
-            vec = torch.stack([fen_to_vec(fen) for fen in fens[beg:beg + 2048]]).to(self.device)
+            vec = torch.stack([fen_to_vec(fen) for fen in fens[beg:beg + batch_size]]).to(self.device)
             with torch.no_grad():
                 model_evals = self.model(vec)
-            res.append(model_evals.flatten().tolist())
+            res.extend(model_evals.flatten().tolist())
         return res
 
 
-
-def min_max_eval(evaluator, fen, depth=None):
+def min_max_eval(fen, depth=None, evaluator=None):
     if depth is None:
         depth = 5
+    if evaluator is None:
+        evaluator = PositionEvaluator()
     board = chess.Board(fen)
+
+    # white wants to maximize, black minimize (negative evals)
+    maximizing = board.turn == chess.WHITE
+
+    return _min_max_rec(evaluator, board, depth, maximizing)
+
+
+def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, maximizing: bool):
+    if depth < 1:
+        raise ValueError("Depth cannot be lower than 1")
+    if board.is_game_over():
+        # if game is over return based on the game result
+        result = board.result()
+        res_to_val = {
+            "1-0": 100,
+            "0-1": -100,
+            "1/2-1/2": 0,
+        }
+        val = res_to_val[result.strip()]
+        return val
+
+    min_or_max = max if maximizing else min
+    possible_boards = []
+    for move in board.legal_moves:
+        new_board = board.copy()
+        new_board.push(move)
+        possible_boards.append(new_board)
+    if depth > 1:
+        return min_or_max(_min_max_rec(evaluator, board, depth - 1, not maximizing) for board in possible_boards)
+    # depth == 1
+    fens = [board.fen() for board in possible_boards]
+    return min_or_max(evaluator.evaluate_positions(fens))
+
+
+def find_best_move(fen, depth=None):
+    board = chess.Board(fen)
+    if board.is_game_over():
+        return None
     moves = board.legal_moves
+    evals = []
 
     for move in moves:
         new_board = board.copy()
         new_board.push(move)
+        fen = new_board.fen()
+        evals.append(min_max_eval(fen, depth))
 
+    evals_with_moves = list(zip(evals, moves))
+    min_or_max = max if board.turn == chess.WHITE else min
+    best_move = min_or_max(evals_with_moves, key=lambda x: x[0])[1]
+
+    return best_move
 
 
 def evaluate_position_piece_value(fen):

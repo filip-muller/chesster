@@ -1,3 +1,6 @@
 torch
 chess
 numpy
+
+flask
+flask-cors

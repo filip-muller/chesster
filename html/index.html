@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess vs AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            max-width: 600px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        #board {
+            width: 500px;
+            margin: 0 auto;
+        }
+
+        .info-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+
+        .status {
+            font-size: 18px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .turn-indicator {
+            font-size: 16px;
+            color: #555;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 24px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .btn-new-game {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-new-game:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-undo {
+            background: #f093fb;
+            color: white;
+        }
+
+        .btn-undo:hover {
+            background: #d678e0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(240, 147, 251, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .thinking {
+            color: #f093fb;
+            font-style: italic;
+        }
+
+        .game-over {
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>♟️ Chess vs AI</h1>
+        <div id="board"></div>
+        <div class="info-panel">
+            <div class="status" id="status">Your turn! Play as White</div>
+            <div class="turn-indicator" id="turn"></div>
+            <div class="buttons">
+                <button class="btn-new-game" onclick="newGame()">New Game</button>
+                <button class="btn-undo" onclick="undoMove()" id="undoBtn">Undo Move</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+
+    <script>
+        const API_URL = 'http://localhost:5000/get_move';
+        let game = new Chess();
+        let board = null;
+        let playerColor = 'w';
+        let isAiThinking = false;
+
+        function onDragStart(source, piece, position, orientation) {
+            // Don't pick up pieces if game is over
+            if (game.game_over()) return false;
+
+            // Don't pick up pieces if it's AI's turn
+            if (isAiThinking) return false;
+
+            // Only pick up pieces for the side to move
+            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+                (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+                return false;
+            }
+
+            // Only allow player to move their own pieces
+            if (game.turn() !== playerColor) return false;
+        }
+
+        function onDrop(source, target) {
+            // Check if move is legal
+            const move = game.move({
+                from: source,
+                to: target,
+                promotion: 'q' // Always promote to queen for simplicity
+            });
+
+            // Illegal move
+            if (move === null) return 'snapback';
+
+            updateStatus();
+
+            // After player moves, get AI move
+            if (!game.game_over()) {
+                setTimeout(getAiMove, 250);
+            }
+        }
+
+        function onSnapEnd() {
+            board.position(game.fen());
+        }
+
+        function updateStatus() {
+            let status = '';
+            let turnText = '';
+
+            if (game.game_over()) {
+                if (game.in_checkmate()) {
+                    status = game.turn() === 'w' ? 'Game Over - Black Wins!' : 'Game Over - White Wins!';
+                } else if (game.in_draw()) {
+                    status = 'Game Over - Draw!';
+                } else if (game.in_stalemate()) {
+                    status = 'Game Over - Stalemate!';
+                } else if (game.in_threefold_repetition()) {
+                    status = 'Game Over - Threefold Repetition!';
+                } else {
+                    status = 'Game Over!';
+                }
+                document.getElementById('status').className = 'status game-over';
+            } else {
+                if (isAiThinking) {
+                    status = 'AI is thinking...';
+                    document.getElementById('status').className = 'status thinking';
+                } else {
+                    status = game.turn() === playerColor ? 'Your turn!' : "AI's turn";
+                    document.getElementById('status').className = 'status';
+                }
+
+                if (game.in_check()) {
+                    turnText = 'Check! ';
+                }
+                turnText += game.turn() === 'w' ? 'White to move' : 'Black to move';
+            }
+
+            document.getElementById('status').textContent = status;
+            document.getElementById('turn').textContent = turnText;
+            document.getElementById('undoBtn').disabled = game.history().length === 0 || isAiThinking;
+        }
+
+        async function getAiMove() {
+            if (game.game_over()) return;
+
+            isAiThinking = true;
+            updateStatus();
+
+            // Disable board during AI turn
+            board = Chessboard('board', {
+                ...config,
+                draggable: false,
+                position: game.fen()
+            });
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        fen: game.fen()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.move) {
+                    // Make the AI move - chess.js accepts UCI format
+                    const move = game.move({
+                        from: data.move.substring(0, 2),
+                        to: data.move.substring(2, 4),
+                        promotion: data.move.length > 4 ? data.move.substring(4) : undefined
+                    });
+
+                    if (move) {
+                        board.position(game.fen());
+                    } else {
+                        console.error('AI returned invalid move: ' + data.move);
+                        console.error('Current FEN: ' + game.fen());
+                        alert('AI returned invalid move: ' + data.move);
+                    }
+                } else if (data.error) {
+                    alert('AI Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error getting AI move:', error);
+                alert('Failed to get AI move. Make sure the Flask server is running on http://localhost:5000');
+            } finally {
+                isAiThinking = false;
+                // Re-enable board for player
+                board = Chessboard('board', {
+                    ...config,
+                    position: game.fen()
+                });
+                updateStatus();
+            }
+        }
+
+        function newGame() {
+            game.reset();
+            board.start();
+            isAiThinking = false;
+            updateStatus();
+        }
+
+        function undoMove() {
+            if (game.history().length === 0) return;
+
+            // Undo player's move
+            game.undo();
+
+            // Undo AI's move if it exists
+            if (game.history().length > 0) {
+                game.undo();
+            }
+
+            board.position(game.fen());
+            updateStatus();
+        }
+
+        // Initialize board
+        const config = {
+            draggable: true,
+            position: 'start',
+            onDragStart: onDragStart,
+            onDrop: onDrop,
+            onSnapEnd: onSnapEnd,
+            pieceTheme: '/img/chesspieces/{piece}.svg'
+        };
+
+        board = Chessboard('board', config);
+        updateStatus();
+
+        // Make board responsive
+        window.addEventListener('resize', () => {
+            board.resize();
+        });
+    </script>
+</body>
+</html>
