@@ -97,18 +97,17 @@ if __name__ == "__main__":
     learning_rate = 0.0001
 
     model = NNModel().to(device)
-    model.load_state_dict(torch.load("weights/3_piece.pth", map_location=device))
+    model.load_state_dict(torch.load("weights/900_more_epochs_full_pieces.pth", map_location=device))
 
     model.train()
 
     loss_fn = torch.nn.MSELoss().to(device)
-    # print(list(model.parameters()))
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     val_position_values = torch.tensor([evaluate_position_piece_value(fen) for fen in val_fens], dtype=torch.float).unsqueeze(1).to(device)
     val_vecs = torch.stack([fen_to_vec(fen) for fen in val_fens]).to(device)
 
-    epochs = 200
+    epochs = 2_000
     batches_per_epoch = 1_000
 
     for epoch in range(epochs):
