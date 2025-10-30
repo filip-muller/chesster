@@ -38,6 +38,9 @@ def create_piece_conversion_dict():
     return conversion
 
 
+PIECE_CONVERSION_DICT = create_piece_conversion_dict()
+
+
 def castling_fen_to_vec(castling_fen):
     """Takes the part of fen that talks about castling (e.g. KQkq) and converts to list"""
     res = []
@@ -70,11 +73,7 @@ def fen_to_vec(fen):
     # delete row seperators
     pieces_fen = pieces_fen.replace("/", "")
 
-    conversion = create_piece_conversion_dict()
-
-    pieces_vec = []
-    for ch in pieces_fen:
-        pieces_vec.extend(conversion[ch])
+    pieces_vec = [e for ch in pieces_fen for e in PIECE_CONVERSION_DICT[ch]]
 
     color_to_move_fen = fen.split(" ")[1].strip()
     if color_to_move_fen == "w":

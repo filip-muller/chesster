@@ -79,7 +79,7 @@ def get_organized_fen_examples():
 
 if __name__ == "__main__":
     # for fen generation
-    random.seed(42)
+    random.seed(43)
     batch_size = 256
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -115,16 +115,34 @@ if __name__ == "__main__":
         for batch_number in range(batches_per_epoch):
             optimizer.zero_grad()
 
+            beg = time.perf_counter()
             fens = [create_random_fen(piece_count=piece_count) for _ in range(batch_size)]
+            end = time.perf_counter()
+            print(f"Creating fen took {end - beg:.5f}")
             # boards = [chess.Board(fen) for fen in fens]
+            beg = time.perf_counter()
             position_values = torch.tensor([evaluate_position_piece_value(fen) for fen in fens], dtype=torch.float).unsqueeze(1).to(device)
+            end = time.perf_counter()
+            print(f"Values took {end - beg:.5f}")
+            beg = time.perf_counter()
             vecs = torch.stack([fen_to_vec(fen) for fen in fens]).to(device)
+            end = time.perf_counter()
+            print(f"Vecs took {end - beg:.5f}")
+            beg = time.perf_counter()
             model_evals = model(vecs)
+            end = time.perf_counter()
+            print(f"Model took {end - beg:.5f}")
+            beg = time.perf_counter()
             loss = loss_fn(model_evals, position_values)
+            end = time.perf_counter()
+            print(f"Loss took {end - beg:.5f}")
+            beg = time.perf_counter()
             loss.backward()
             optimizer.step()
+            end = time.perf_counter()
+            print(f"Grad and step took {end - beg:.5f}")
             # just for monitoring
-            total_loss += loss
+            total_loss += loss.item()
 
         # for _ in range(batch_size):
         #     beg = time.perf_counter()
@@ -164,7 +182,7 @@ if __name__ == "__main__":
         # optimizer.step()
 
         print(f"Epoch {epoch}:")
-        print(total_loss.item() / batches_per_epoch)
+        print(total_loss / batches_per_epoch)
         with torch.no_grad():
             val_model_evals = model(val_vecs)
             val_loss = loss_fn(val_model_evals, val_position_values)

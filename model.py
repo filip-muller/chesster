@@ -30,14 +30,14 @@ class NNModel(nn.Module):
 class PositionEvaluator:
     def __init__(self, weights_path=None):
         if weights_path is None:
-            weights_path = "weights/full_pieces.pth"
+            weights_path = "weights/900_plus_1500.pth"
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = NNModel().to(self.device)
         self.model.eval()
         self.model.load_state_dict(torch.load(weights_path, map_location=self.device))
 
     def evaluate_position(self, fen):
-        return self.evaluate_positions([fen])[0].item()
+        return self.evaluate_positions([fen])[0]
 
     def evaluate_positions(self, fens, batch_size=2048):
         """Uses batching, use for better performance"""
@@ -55,6 +55,10 @@ def min_max_eval(fen, depth=None, evaluator=None):
         depth = 5
     if evaluator is None:
         evaluator = PositionEvaluator()
+
+    if depth == 0:
+        return evaluator.evaluate_position(fen)
+
     board = chess.Board(fen)
 
     # white wants to maximize, black minimize (negative evals)
@@ -76,6 +80,10 @@ def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, m
         }
         val = res_to_val[result.strip()]
         return val
+    if board.is_repetition(3):
+        return 0
+    if board.is_fifty_moves():
+        return 0
 
     min_or_max = max if maximizing else min
     possible_boards = []

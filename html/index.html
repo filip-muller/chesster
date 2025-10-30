@@ -42,6 +42,39 @@
             border-radius: 8px;
         }
 
+        .controls-row {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+            align-items: flex-end;
+        }
+
+        .control-group {
+            flex: 1;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .control-group input {
+            width: 100%;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .control-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
         .status {
             font-size: 18px;
             font-weight: bold;
@@ -93,10 +126,168 @@
             box-shadow: 0 4px 12px rgba(240, 147, 251, 0.4);
         }
 
+        .btn-load-fen {
+            background: #4ecdc4;
+            color: white;
+        }
+
+        .btn-load-fen:hover {
+            background: #3db9b0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(78, 205, 196, 0.4);
+        }
+
+        .btn-export-pgn {
+            background: #f39c12;
+            color: white;
+        }
+
+        .btn-export-pgn:hover {
+            background: #e67e22;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.4);
+        }
+
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none !important;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.3s;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .form-group input[type="text"] {
+            font-family: monospace;
+        }
+
+        .form-group input[type="text"]:focus,
+        .form-group input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 5px;
+            color: #777;
+            font-size: 12px;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .radio-group label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-weight: normal;
+        }
+
+        .radio-group input[type="radio"] {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }
+
+        .btn-default-fen {
+            background: #95a5a6;
+            color: white;
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+
+        .btn-default-fen:hover {
+            background: #7f8c8d;
+        }
+
+        .btn-confirm {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-confirm:hover {
+            background: #5568d3;
+        }
+
+        .btn-cancel {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-cancel:hover {
+            background: #c0392b;
         }
 
         .thinking {
@@ -118,9 +309,62 @@
         <div class="info-panel">
             <div class="status" id="status">Your turn! Play as White</div>
             <div class="turn-indicator" id="turn"></div>
+            <div class="controls-row">
+                <div class="control-group">
+                    <label for="depthInput">Search Depth:</label>
+                    <input type="number" id="depthInput" min="0" max="10" value="3">
+                </div>
+                <div class="control-group">
+                    <label for="minTimeInput">Min Time/Move (ms):</label>
+                    <input type="number" id="minTimeInput" min="0" max="5000" step="100" value="500">
+                </div>
+            </div>
             <div class="buttons">
-                <button class="btn-new-game" onclick="newGame()">New Game</button>
                 <button class="btn-undo" onclick="undoMove()" id="undoBtn">Undo Move</button>
+                <button class="btn-load-fen" onclick="openFenDialog()">Load FEN</button>
+                <button class="btn-export-pgn" onclick="exportPGN()">Export PGN</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FEN Dialog Modal -->
+    <div id="fenModal" class="modal">
+        <div class="modal-content">
+            <h2>Load Position from FEN</h2>
+            <div class="form-group">
+                <label for="fenInput">FEN String:</label>
+                <input type="text" id="fenInput" placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1">
+            </div>
+            <div class="form-group">
+                <label>Game Mode:</label>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="gameMode" value="player-vs-ai" checked>
+                        Player vs AI
+                    </label>
+                    <label>
+                        <input type="radio" name="gameMode" value="ai-vs-ai">
+                        AI vs AI
+                    </label>
+                </div>
+            </div>
+            <div class="form-group" id="aiColorGroup">
+                <label>AI plays as:</label>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="aiColor" value="black" checked>
+                        Black
+                    </label>
+                    <label>
+                        <input type="radio" name="aiColor" value="white">
+                        White
+                    </label>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn-default-fen" onclick="setDefaultFen()">Starting Position</button>
+                <button class="btn-confirm" onclick="loadFenPosition()">Load Position</button>
+                <button class="btn-cancel" onclick="closeFenDialog()">Cancel</button>
             </div>
         </div>
     </div>
@@ -131,10 +375,13 @@
 
     <script>
         const API_URL = 'http://localhost:5000/get_move';
+        const DEFAULT_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
         let game = new Chess();
         let board = null;
         let playerColor = 'w';
+        let aiColor = 'b';
         let isAiThinking = false;
+        let gameMode = 'player-vs-ai'; // 'player-vs-ai' or 'ai-vs-ai'
 
         function onDragStart(source, piece, position, orientation) {
             // Don't pick up pieces if game is over
@@ -142,6 +389,9 @@
 
             // Don't pick up pieces if it's AI's turn
             if (isAiThinking) return false;
+
+            // In AI vs AI mode, don't allow any dragging
+            if (gameMode === 'ai-vs-ai') return false;
 
             // Only pick up pieces for the side to move
             if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
@@ -198,7 +448,12 @@
                     status = 'AI is thinking...';
                     document.getElementById('status').className = 'status thinking';
                 } else {
-                    status = game.turn() === playerColor ? 'Your turn!' : "AI's turn";
+                    if (gameMode === 'ai-vs-ai') {
+                        status = 'AI vs AI - Watch the game';
+                    } else {
+                        const colorName = playerColor === 'w' ? 'White' : 'Black';
+                        status = game.turn() === playerColor ? 'Your turn!' : "AI's turn";
+                    }
                     document.getElementById('status').className = 'status';
                 }
 
@@ -219,12 +474,9 @@
             isAiThinking = true;
             updateStatus();
 
-            // Disable board during AI turn
-            board = Chessboard('board', {
-                ...config,
-                draggable: false,
-                position: game.fen()
-            });
+            const startTime = Date.now();
+            const depth = parseInt(document.getElementById('depthInput').value) || 0;
+            const minTime = parseInt(document.getElementById('minTimeInput').value) || 500;
 
             try {
                 const response = await fetch(API_URL, {
@@ -233,11 +485,19 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        fen: game.fen()
+                        fen: game.fen(),
+                        depth: depth
                     })
                 });
 
                 const data = await response.json();
+
+                // Calculate remaining time to meet minimum
+                const elapsed = Date.now() - startTime;
+                const remainingTime = Math.max(0, minTime - elapsed);
+
+                // Wait for remaining time before making move
+                await new Promise(resolve => setTimeout(resolve, remainingTime));
 
                 if (data.move) {
                     // Make the AI move - chess.js accepts UCI format
@@ -262,12 +522,12 @@
                 alert('Failed to get AI move. Make sure the Flask server is running on http://localhost:5000');
             } finally {
                 isAiThinking = false;
-                // Re-enable board for player
-                board = Chessboard('board', {
-                    ...config,
-                    position: game.fen()
-                });
                 updateStatus();
+
+                // In AI vs AI mode, continue playing
+                if (gameMode === 'ai-vs-ai' && !game.game_over()) {
+                    setTimeout(getAiMove, 100);
+                }
             }
         }
 
@@ -275,7 +535,15 @@
             game.reset();
             board.start();
             isAiThinking = false;
+            playerColor = 'w';
+            aiColor = 'b';
+            gameMode = 'player-vs-ai';
             updateStatus();
+
+            // If AI plays white, make first move
+            if (aiColor === 'w') {
+                setTimeout(getAiMove, 500);
+            }
         }
 
         function undoMove() {
@@ -291,6 +559,128 @@
 
             board.position(game.fen());
             updateStatus();
+        }
+
+        function openFenDialog() {
+            document.getElementById('fenInput').value = game.fen();
+            document.getElementById('fenModal').style.display = 'block';
+        }
+
+        function closeFenDialog() {
+            document.getElementById('fenModal').style.display = 'none';
+        }
+
+        function setDefaultFen() {
+            document.getElementById('fenInput').value = DEFAULT_FEN;
+        }
+
+        function loadFenPosition() {
+            const fenInput = document.getElementById('fenInput').value.trim();
+            const selectedGameMode = document.querySelector('input[name="gameMode"]:checked').value;
+            const aiColorSelection = document.querySelector('input[name="aiColor"]:checked').value;
+
+            // Validate FEN
+            try {
+                const testGame = new Chess(fenInput);
+
+                // Load the position
+                game.load(fenInput);
+                board.position(fenInput);
+
+                // Set game mode
+                gameMode = selectedGameMode;
+
+                if (gameMode === 'ai-vs-ai') {
+                    // In AI vs AI mode, board orientation doesn't matter much
+                    board.orientation('white');
+                    playerColor = null;
+                    aiColor = null;
+                } else {
+                    // Set colors for player vs AI
+                    aiColor = aiColorSelection === 'white' ? 'w' : 'b';
+                    playerColor = aiColor === 'w' ? 'b' : 'w';
+
+                    // Flip board if player is black
+                    board.orientation(playerColor === 'w' ? 'white' : 'black');
+                }
+
+                closeFenDialog();
+                isAiThinking = false;
+                updateStatus();
+
+                // Start AI playing
+                if (gameMode === 'ai-vs-ai' && !game.game_over()) {
+                    setTimeout(getAiMove, 500);
+                } else if (game.turn() === aiColor && !game.game_over()) {
+                    setTimeout(getAiMove, 500);
+                }
+
+            } catch (error) {
+                alert('Invalid FEN string: ' + error.message);
+            }
+        }
+
+        // Show/hide AI color selection based on game mode
+        document.addEventListener('DOMContentLoaded', function() {
+            const gameModeRadios = document.querySelectorAll('input[name="gameMode"]');
+            const aiColorGroup = document.getElementById('aiColorGroup');
+
+            gameModeRadios.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.value === 'ai-vs-ai') {
+                        aiColorGroup.style.display = 'none';
+                    } else {
+                        aiColorGroup.style.display = 'block';
+                    }
+                });
+            });
+        });
+
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('fenModal');
+            if (event.target === modal) {
+                closeFenDialog();
+            }
+        }
+
+        function exportPGN() {
+            // Set PGN headers
+            game.header('Event', 'Chess Game');
+            game.header('Site', 'Web Browser');
+            game.header('Date', new Date().toISOString().split('T')[0]);
+
+            if (gameMode === 'ai-vs-ai') {
+                game.header('White', 'Chesster');
+                game.header('Black', 'Chesster');
+            } else {
+                game.header('White', aiColor === 'w' ? 'Chesster' : 'Player');
+                game.header('Black', aiColor === 'b' ? 'Chesster' : 'Player');
+            }
+
+            // Add result if game is over
+            if (game.game_over()) {
+                if (game.in_checkmate()) {
+                    game.header('Result', game.turn() === 'w' ? '0-1' : '1-0');
+                } else if (game.in_draw() || game.in_stalemate() || game.in_threefold_repetition()) {
+                    game.header('Result', '1/2-1/2');
+                }
+            } else {
+                game.header('Result', '*');
+            }
+
+            const pgn = game.pgn();
+
+            // Create a blob and download it
+            const blob = new Blob([pgn], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'chess_game_' + Date.now() + '.pgn';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
         }
 
         // Initialize board
