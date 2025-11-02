@@ -4,13 +4,17 @@ import torch
 # TODO: include en passant, potentially by a new piece "pawn capturable by en passant"
 # TODO: halfmoves since last capture or pawnmove not included (relevant for draw by 50-move rule)
 
+# TODO probably make embedding such that it doesnt differentiate between white/black pieces but between pieces of the player to move and the opponent
+# This removes redundancy - you wont create a new position (in terms of embedding) just by swapping the colors
+# This will make it such that model always evaluates from the perspective of the player to move (positive number means player to move is winning, not white), keep that in mind !!
+
 EMPTY = 0  # square with no piece
 PAWN = 1
 KNIGHT = 2
 BISHOP = 3
 ROOK = 4
 QUEEN = 5
-KING = 6
+KING = 6  # maybe king should have a lower value and queen should be most valuable
 
 WHITE = 1
 BLACK = -1
