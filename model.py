@@ -51,6 +51,7 @@ class PositionEvaluator:
 
 
 def min_max_eval(fen, depth=None, evaluator=None):
+    """Returns tuple (position_eval, best_move)"""
     if depth is None:
         depth = 5
     if evaluator is None:
@@ -68,6 +69,7 @@ def min_max_eval(fen, depth=None, evaluator=None):
 
 
 def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, maximizing: bool):
+    """Returns tuple (position_eval, best_move)"""
     if depth < 1:
         raise ValueError("Depth cannot be lower than 1")
     if board.is_game_over():
@@ -87,34 +89,29 @@ def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, m
 
     min_or_max = max if maximizing else min
     possible_boards = []
-    for move in board.legal_moves:
+    legal_moves = list(board.legal_moves)
+    for move in legal_moves:
         new_board = board.copy()
         new_board.push(move)
         possible_boards.append(new_board)
     if depth > 1:
-        return min_or_max(_min_max_rec(evaluator, board, depth - 1, not maximizing) for board in possible_boards)
-    # depth == 1
-    fens = [board.fen() for board in possible_boards]
-    return min_or_max(evaluator.evaluate_positions(fens))
+        # find recursively, get just the position evaluation (index 0)
+        evals = [_min_max_rec(evaluator, board, depth - 1, not maximizing)[0] for board in possible_boards]
+    else:
+        fens = [board.fen() for board in possible_boards]
+        evals = evaluator.evaluate_positions(fens)
+
+    evals_with_moves = list(zip(evals, legal_moves))
+    # return tuple (eval, best_move)
+    return min_or_max(evals_with_moves, key=lambda x: x[0])
 
 
 def find_best_move(fen, depth=None):
     board = chess.Board(fen)
     if board.is_game_over():
         return None
-    moves = board.legal_moves
-    evals = []
 
-    for move in moves:
-        new_board = board.copy()
-        new_board.push(move)
-        fen = new_board.fen()
-        evals.append(min_max_eval(fen, depth))
-
-    evals_with_moves = list(zip(evals, moves))
-    min_or_max = max if board.turn == chess.WHITE else min
-    best_move = min_or_max(evals_with_moves, key=lambda x: x[0])[1]
-
+    evaluation, best_move = min_max_eval(fen, depth)
     return best_move
 
 
