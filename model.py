@@ -30,7 +30,7 @@ class NNModel(nn.Module):
 class PositionEvaluator:
     def __init__(self, weights_path=None):
         if weights_path is None:
-            weights_path = "weights/900_plus_1500.pth"
+            weights_path = "weights/new/900_plus_1500.pth"
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = NNModel().to(self.device)
         self.model.eval()
@@ -50,25 +50,31 @@ class PositionEvaluator:
         return res
 
 
-def min_max_eval(fen, depth=None, evaluator=None):
+def min_max_eval(fen, depth=None, always_continue_with_captures=None, evaluator=None):
     """Returns tuple (position_eval, best_move)"""
     if depth is None:
         depth = 5
+    if always_continue_with_captures is None:
+        always_continue_with_captures = False
     if evaluator is None:
         evaluator = PositionEvaluator()
 
-    if depth == 0:
-        return evaluator.evaluate_position(fen)
-
     board = chess.Board(fen)
+
+    if depth == 0:
+        res = evaluator.evaluate_position(fen)
+        if board.turn == chess.BLACK:
+            # return score from white perspective, model returns from color to move
+            res *= -1
+        return res
 
     # white wants to maximize, black minimize (negative evals)
     maximizing = board.turn == chess.WHITE
 
-    return _min_max_rec(evaluator, board, depth, maximizing)
+    return _min_max_rec(evaluator, board, depth, always_continue_with_captures, maximizing)
 
 
-def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, maximizing: bool):
+def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, always_continue_with_captures: bool, maximizing: bool):
     """Returns tuple (position_eval, best_move)"""
     if depth < 1:
         raise ValueError("Depth cannot be lower than 1")
@@ -87,9 +93,10 @@ def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, m
         return (0, None)
     if board.is_fifty_moves():
         return (0, None)
+    color_to_move = board.turn
 
     min_or_max = max if maximizing else min
-    possible_boards = []
+    possible_boards : list[chess.Board] = []
     legal_moves = list(board.legal_moves)
     for move in legal_moves:
         new_board = board.copy()
@@ -101,29 +108,48 @@ def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, m
     else:
         fens = [b.fen() for b in possible_boards]
         evals = evaluator.evaluate_positions(fens)
+        if color_to_move == chess.WHITE:
+            # evals came from a position where BLACK is to move (it is one move after the one with white to move)
+            # thus we need to flip evals from the perspective of color to move to perspective of white
+            evals = [-1 * val for val in evals]
+        # note: these positions also get evaluated twice (also by the evaluator, improve later for performance)
+        for i in range(len(possible_boards)):
+            b = possible_boards[i]
+            for legal_move in b.legal_moves:
+                # if we find a capture of a non-pawn piece, keep evaluating deeper (ignoring depth limits)
+                if b.is_capture(legal_move):
+                    piece_to_capture = b.piece_at(move.to_square)
+                    # piece_at can probably return None for en passant
+                    if piece_to_capture is not None and piece_to_capture.piece_type != chess.PAWN:
+                        # do not decrease depth, it is already 1, this will keep it going while captures are available
+                        val = _min_max_rec(evaluator, b, depth, not maximizing)[0]
+                        evals[i] = val
 
     evals_with_moves = list(zip(evals, legal_moves))
     # return tuple (eval, best_move)
     return min_or_max(evals_with_moves, key=lambda x: x[0])
 
 
-def find_best_move(fen, depth=None):
+def find_best_move(fen, depth=None, always_continue_with_captures=None):
     board = chess.Board(fen)
     if board.is_game_over():
         return None
 
-    evaluation, best_move = min_max_eval(fen, depth)
+    evaluation, best_move = min_max_eval(fen, depth, always_continue_with_captures)
     print(f"Selecting move {best_move} with eval {evaluation} (depth {depth})")
     return best_move
 
 
-def evaluate_position_piece_value(fen):
+def evaluate_position_piece_value(fen, to_move_perspective=False):
     """
     Evaluates position simply using standard piece values
 
     Doesnt even take potential recaptures into consideration, this is to be done by min_max
 
     Result is (white_material - black_material) -> positive values white lead, negative black
+
+    If to_move_perspective is True, instead returns the value from the perspective of the player to move.
+    So if it is black to move, it will instead return (black_material - white_material)
     """
     piece_values = {
         chess.PAWN: 1,
@@ -142,4 +168,9 @@ def evaluate_position_piece_value(fen):
         white_material += len(board.pieces(piece_type, chess.WHITE)) * piece_values[piece_type]
         black_material += len(board.pieces(piece_type, chess.BLACK)) * piece_values[piece_type]
 
-    return white_material - black_material
+    res = white_material - black_material
+
+    if to_move_perspective and board.turn == chess.BLACK:
+        # if we want value from position of player to move and its black turn, flip value
+        res *= -1
+    return res
