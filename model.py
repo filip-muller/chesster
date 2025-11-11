@@ -5,7 +5,7 @@ from fen_to_vec import fen_to_vec
 
 
 class NNModel(nn.Module):
-    def __init__(self, input_size=133):
+    def __init__(self, input_size=132):
         super().__init__()
         layer_sizes = [256, 512, 128]
         previous_size = input_size
