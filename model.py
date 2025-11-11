@@ -81,11 +81,12 @@ def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, m
             "1/2-1/2": 0,
         }
         val = res_to_val[result.strip()]
-        return val
+        return (val, None)
     if board.is_repetition(3):
-        return 0
+        print("Returning repetition")
+        return (0, None)
     if board.is_fifty_moves():
-        return 0
+        return (0, None)
 
     min_or_max = max if maximizing else min
     possible_boards = []
@@ -96,9 +97,9 @@ def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, m
         possible_boards.append(new_board)
     if depth > 1:
         # find recursively, get just the position evaluation (index 0)
-        evals = [_min_max_rec(evaluator, board, depth - 1, not maximizing)[0] for board in possible_boards]
+        evals = [_min_max_rec(evaluator, b, depth - 1, not maximizing)[0] for b in possible_boards]
     else:
-        fens = [board.fen() for board in possible_boards]
+        fens = [b.fen() for b in possible_boards]
         evals = evaluator.evaluate_positions(fens)
 
     evals_with_moves = list(zip(evals, legal_moves))
@@ -112,6 +113,7 @@ def find_best_move(fen, depth=None):
         return None
 
     evaluation, best_move = min_max_eval(fen, depth)
+    print(f"Selecting move {best_move} with eval {evaluation} (depth {depth})")
     return best_move
 
 
