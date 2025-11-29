@@ -97,14 +97,14 @@ if __name__ == "__main__":
     learning_rate = 0.0001
 
     model = NNModel().to(device)
-    model.load_state_dict(torch.load("weights/900_more_epochs_full_pieces.pth", map_location=device))
+    model.load_state_dict(torch.load("weights/new/900_plus_1500.pth", map_location=device))
 
     model.train()
 
     loss_fn = torch.nn.MSELoss().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    val_position_values = torch.tensor([evaluate_position_piece_value(fen) for fen in val_fens], dtype=torch.float).unsqueeze(1).to(device)
+    val_position_values = torch.tensor([evaluate_position_piece_value(fen, to_move_perspective=True) for fen in val_fens], dtype=torch.float).unsqueeze(1).to(device)
     val_vecs = torch.stack([fen_to_vec(fen) for fen in val_fens]).to(device)
 
     epochs = 2_000
@@ -118,29 +118,29 @@ if __name__ == "__main__":
             beg = time.perf_counter()
             fens = [create_random_fen(piece_count=piece_count) for _ in range(batch_size)]
             end = time.perf_counter()
-            print(f"Creating fen took {end - beg:.5f}")
+            #print(f"Creating fen took {end - beg:.5f}")
             # boards = [chess.Board(fen) for fen in fens]
             beg = time.perf_counter()
-            position_values = torch.tensor([evaluate_position_piece_value(fen) for fen in fens], dtype=torch.float).unsqueeze(1).to(device)
+            position_values = torch.tensor([evaluate_position_piece_value(fen, to_move_perspective=True) for fen in fens], dtype=torch.float).unsqueeze(1).to(device)
             end = time.perf_counter()
-            print(f"Values took {end - beg:.5f}")
+            #print(f"Values took {end - beg:.5f}")
             beg = time.perf_counter()
             vecs = torch.stack([fen_to_vec(fen) for fen in fens]).to(device)
             end = time.perf_counter()
-            print(f"Vecs took {end - beg:.5f}")
+            #print(f"Vecs took {end - beg:.5f}")
             beg = time.perf_counter()
             model_evals = model(vecs)
             end = time.perf_counter()
-            print(f"Model took {end - beg:.5f}")
+            #print(f"Model took {end - beg:.5f}")
             beg = time.perf_counter()
             loss = loss_fn(model_evals, position_values)
             end = time.perf_counter()
-            print(f"Loss took {end - beg:.5f}")
+            #print(f"Loss took {end - beg:.5f}")
             beg = time.perf_counter()
             loss.backward()
             optimizer.step()
             end = time.perf_counter()
-            print(f"Grad and step took {end - beg:.5f}")
+            #print(f"Grad and step took {end - beg:.5f}")
             # just for monitoring
             total_loss += loss.item()
 
@@ -188,7 +188,7 @@ if __name__ == "__main__":
             val_loss = loss_fn(val_model_evals, val_position_values)
         print("Validation:", val_loss.item())
 
-        torch.save(model.state_dict(), "weights/model.pth")
+        # torch.save(model.state_dict(), "weights/model.pth")
             # val_loss = 0
             # with torch.no_grad():
             #     for fen in val_fens2:

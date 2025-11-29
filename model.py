@@ -53,7 +53,7 @@ class PositionEvaluator:
 def min_max_eval(fen, depth=None, always_continue_with_captures=None, evaluator=None):
     """Returns tuple (position_eval, best_move)"""
     if depth is None:
-        depth = 5
+        depth = 3
     if always_continue_with_captures is None:
         always_continue_with_captures = False
     if evaluator is None:
@@ -74,7 +74,18 @@ def min_max_eval(fen, depth=None, always_continue_with_captures=None, evaluator=
     return _min_max_rec(evaluator, board, depth, always_continue_with_captures, maximizing)
 
 
-def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, always_continue_with_captures: bool, maximizing: bool):
+def is_piece_capture(board: chess.Board, move: chess.Move):
+    """Returns if the move is a capture of a NON-PAWN piece"""
+    if not board.is_capture(move):
+        return False
+    piece = board.piece_at(move.to_square)
+    if piece is None:
+        # happens with en passant prolly
+        return False
+    return piece.piece_type != chess.PAWN
+
+
+def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, always_continue_with_captures: bool, maximizing: bool, captures_only=False):
     """Returns tuple (position_eval, best_move)"""
     if depth < 1:
         raise ValueError("Depth cannot be lower than 1")
@@ -99,12 +110,15 @@ def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, a
     possible_boards : list[chess.Board] = []
     legal_moves = list(board.legal_moves)
     for move in legal_moves:
+        if captures_only and not is_piece_capture(board, move):
+            # we are just checking capture lines, skip other moves
+            continue
         new_board = board.copy()
         new_board.push(move)
         possible_boards.append(new_board)
     if depth > 1:
         # find recursively, get just the position evaluation (index 0)
-        evals = [_min_max_rec(evaluator, b, depth - 1, not maximizing)[0] for b in possible_boards]
+        evals = [_min_max_rec(evaluator, b, depth - 1, always_continue_with_captures, not maximizing)[0] for b in possible_boards]
     else:
         fens = [b.fen() for b in possible_boards]
         evals = evaluator.evaluate_positions(fens)
@@ -112,17 +126,23 @@ def _min_max_rec(evaluator: PositionEvaluator, board: chess.Board, depth: int, a
             # evals came from a position where BLACK is to move (it is one move after the one with white to move)
             # thus we need to flip evals from the perspective of color to move to perspective of white
             evals = [-1 * val for val in evals]
-        # note: these positions also get evaluated twice (also by the evaluator, improve later for performance)
-        for i in range(len(possible_boards)):
-            b = possible_boards[i]
-            for legal_move in b.legal_moves:
-                # if we find a capture of a non-pawn piece, keep evaluating deeper (ignoring depth limits)
-                if b.is_capture(legal_move):
-                    piece_to_capture = b.piece_at(move.to_square)
-                    # piece_at can probably return None for en passant
-                    if piece_to_capture is not None and piece_to_capture.piece_type != chess.PAWN:
-                        # do not decrease depth, it is already 1, this will keep it going while captures are available
-                        val = _min_max_rec(evaluator, b, depth, not maximizing)[0]
+        # This is still wrong, it only needs to look at captures afterwards
+        if always_continue_with_captures:
+            # note: these positions also get evaluated twice (also by the evaluator, improve later for performance)
+            for i in range(len(possible_boards)):
+                b = possible_boards[i]
+                for legal_move in b.legal_moves:
+                    # if we find a capture of a non-pawn piece, keep evaluating deeper (ignoring depth limits)
+                    if is_piece_capture(b, legal_move):
+                        # Note: this will probably not work, there are actually too many options as we find all the positions where the moves prior are pretty much just getting the perfect setup for us to need to go as deep and wide as possible
+                        #print("Looking deeper...", b.ply(), board.fen())
+                        #if board.fen() == "rB1qkb1r/pp2p1pp/5n2/3p4/3Pp3/2N5/PPP2PPP/R2bKBNR w KQkq - 0 6":
+                        #if b.ply() >= 13:
+                        #    print(board.fen())
+                        #    print(board.move_stack)
+                        #    exit()
+                        # do not decrease depth, but set captures_only such that we only look at capturing moves from now
+                        val = _min_max_rec(evaluator, b, depth, always_continue_with_captures, not maximizing, captures_only=True)[0]
                         evals[i] = val
 
     evals_with_moves = list(zip(evals, legal_moves))
