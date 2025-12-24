@@ -34,7 +34,7 @@ class TransformerLayer(nn.Module):
             nn.Linear(mlp_hidden_size, self.emb_dim),
         )
 
-    def forward(self, emb: torch.Tensor):
+    def forward(self, emb: torch.Tensor, attention_mask: torch.Tensor = None):
         is_batched = emb.dim() == 3
         if not is_batched:
             emb = emb.unsqueeze(0)
@@ -44,29 +44,38 @@ class TransformerLayer(nn.Module):
         # layer norm before self attention
         normed_emb = self.first_layer_norm(emb)
 
-        # q, k, v shapes [B, Token count, self.emb_dim]
+        # q, k, v shapes [B, Token count (T), self.emb_dim]
         q = self.q(normed_emb)
         k = self.k(normed_emb)
         v = self.v(normed_emb)
 
         # reshape for multihead - add head id as an extra "batch" dimension
-        # resulting shape [B, head_count, token count, head_dim]
+        # resulting shape [B, head_count (H), token count (T), head_dim (HD)]
         q = q.view(B, N, self.head_count, self.head_dim).transpose(1, 2)
         k = k.view(B, N, self.head_count, self.head_dim).transpose(1, 2)
         v = v.view(B, N, self.head_count, self.head_dim).transpose(1, 2)
 
         # calculate scaled dot product similarity (scale by sqrt of embedding size (d))
-        # q is shape [B, Token count, self.emb_dim], we multiply by kT - [B, self.emb_dim, token count]
+        # q is shape [B, H, T, HD], we multiply by kT - [B, H, HD, T]
         similarities = q @ k.transpose(-1, -2) / math.sqrt(self.head_dim)
-        # similarities shape [B, token count, token count]
+        # similarities shape [B, H, T, T]
         # similarities in [..., i, j] is similarity of query i to key j -> softmax along -1
+
+        # if there is padding, apply the attention mask, to remove attention from padding
+        if attention_mask is not None:
+            attention_mask = attention_mask.unsqueeze(1).unsqueeze(1)
+            # fill padding attention to -inf (leading to 0 in softmax)
+            similarities = similarities.masked_fill(attention_mask == 0, float("-inf"))
+
+        # softmax along -1 such that for each query the key attentions sum to 1
         softmaxes = nn.functional.softmax(similarities, dim=-1)
-        # sum(softmaxes[b, i, :]) is now 1 for every b,i
+        # sum(softmaxes[b, h, i, :]) is now 1 for every b,h,i
         # every row has the softmax values for that query
+
         attention_adjusted_vals = softmaxes @ v
 
         # reshape back from multiple heads - "transpose back and flatten across heads"
-        # [B, head_count, N, head_dim] -> [B, N, D]
+        # [B, head_count, N, head_dim] -> [B, N, emb_dim]
         attention_adjusted_vals = attention_adjusted_vals.transpose(1, 2).contiguous().view(B, N, D)
 
         mha_out = self.out(attention_adjusted_vals)
@@ -88,7 +97,7 @@ class TransformerLayer(nn.Module):
 
 class ChessTransformer(nn.Module):
     # TODO: add some dropouts 0.1 and other potential enhancements
-    def __init__(self, in_size, emb_dim=512, layer_count=4, head_hidden_dim=2048):
+    def __init__(self, in_size, emb_dim=512, head_count=4, layer_count=4, head_hidden_dim=2048):
         """
         ViT-like trasnformer for chess
 
@@ -105,7 +114,7 @@ class ChessTransformer(nn.Module):
         # CLS token - use lower variance distribution (0.05)
         self.cls_token_embedding = nn.Parameter(torch.randn(self.emb_dim) * 0.05)
 
-        self.multihead_layers = nn.Sequential(*(TransformerLayer(self.emb_dim) for _ in range(layer_count)))
+        self.multihead_layers = nn.ModuleList((TransformerLayer(self.emb_dim, head_count=head_count) for _ in range(layer_count)))
 
         # layer norm for the result in the cls token
         self.layer_norm = nn.LayerNorm(emb_dim)
@@ -117,10 +126,16 @@ class ChessTransformer(nn.Module):
         )
 
 
-    def forward(self, x: torch.Tensor()):
+    def forward(self, x: torch.Tensor, piece_counts=None):
         # expects the last feature to be the position
         positions = x[...,-1].int()
         x = x[...,:-1]
+
+        # attention mask in case there is padding (None piece counts -> None mask)
+        mask = self.create_mask(piece_counts)
+        if mask is not None:
+            mask = mask.to(x.device)
+
         # embed x
         emb = self.embedding(x)
         # add positional encoding
@@ -140,8 +155,10 @@ class ChessTransformer(nn.Module):
 
         #TODO: dropout 0.1 probably goes here
 
-        # apply all the MSA+MLP layers
-        attention_layers_out = self.multihead_layers(emb)
+        # apply all the MSA+MLP layers - TODO fix!!!
+        attention_layers_out = emb
+        for i in range(len(self.multihead_layers)):
+            attention_layers_out = self.multihead_layers[i](attention_layers_out, attention_mask=mask)
 
         # take only the cls token output for result
         cls_out = attention_layers_out[..., 0, :]
@@ -149,6 +166,15 @@ class ChessTransformer(nn.Module):
 
         out = self.head(cls_out)
         return out
+
+    @staticmethod
+    def create_mask(piece_counts: list[int]):
+        if piece_counts is None:
+            return None
+        max_count = max(piece_counts)
+        # for each, put 1s for cls token and pieces (count + 1) and 0 for padding
+        mask = torch.stack([torch.concat([torch.ones(count + 1), torch.zeros(max_count - count)]) for count in piece_counts])
+        return mask
 
 
 if __name__ == "__main__":

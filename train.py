@@ -3,14 +3,15 @@ import chess
 import torch
 import time
 
-from fen_to_vec import fen_to_vec
+from fen_to_vec import fen_to_vec, fen_to_onehot, batch_and_pad_onehot
 from model import NNModel, evaluate_position_piece_value
+from chess_transformer import ChessTransformer
 
 
 def create_random_fen(piece_count=None, weights=None):
     """Creates fens of positions that dont necessarily make sense, just for piece value"""
     if piece_count is None:
-        piece_count = random.randint(0, 32)
+        piece_count = random.randint(0, 30)
     if piece_count > 62:
         raise ValueError("piece_count too high, max allowed is 62 to leave space for 2 kings")
     fen_ending = "- 0 1"
@@ -96,8 +97,10 @@ if __name__ == "__main__":
     piece_count = None
     learning_rate = 0.0001
 
-    model = NNModel().to(device)
-    model.load_state_dict(torch.load("weights/new/900_plus_1500.pth", map_location=device))
+    # model = NNModel().to(device)
+    model = ChessTransformer(in_size=8, emb_dim=512, head_count=4, layer_count=4).to(device)
+
+    # model.load_state_dict(torch.load("weights/new/900_plus_1500.pth", map_location=device))
 
     model.train()
 
@@ -105,7 +108,10 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     val_position_values = torch.tensor([evaluate_position_piece_value(fen, to_move_perspective=True) for fen in val_fens], dtype=torch.float).unsqueeze(1).to(device)
-    val_vecs = torch.stack([fen_to_vec(fen) for fen in val_fens]).to(device)
+    # val_vecs = torch.stack([fen_to_vec(fen) for fen in val_fens]).to(device)
+    val_boards = [fen_to_onehot(fen) for fen in val_fens]
+    val_vecs, val_piece_counts = batch_and_pad_onehot(val_boards)
+    val_vecs = val_vecs.to(device)
 
     epochs = 2_000
     batches_per_epoch = 1_000
@@ -125,11 +131,14 @@ if __name__ == "__main__":
             end = time.perf_counter()
             #print(f"Values took {end - beg:.5f}")
             beg = time.perf_counter()
-            vecs = torch.stack([fen_to_vec(fen) for fen in fens]).to(device)
+            # vecs = torch.stack([fen_to_vec(fen) for fen in fens]).to(device)
+            boards = [fen_to_onehot(fen) for fen in fens]
+            vecs, piece_counts = batch_and_pad_onehot(boards)
+            vecs = vecs.to(device)
             end = time.perf_counter()
             #print(f"Vecs took {end - beg:.5f}")
             beg = time.perf_counter()
-            model_evals = model(vecs)
+            model_evals = model(vecs, piece_counts)
             end = time.perf_counter()
             #print(f"Model took {end - beg:.5f}")
             beg = time.perf_counter()
@@ -184,11 +193,13 @@ if __name__ == "__main__":
         print(f"Epoch {epoch}:")
         print(total_loss / batches_per_epoch)
         with torch.no_grad():
-            val_model_evals = model(val_vecs)
+            val_model_evals = model(val_vecs, val_piece_counts)
             val_loss = loss_fn(val_model_evals, val_position_values)
         print("Validation:", val_loss.item())
 
-        # torch.save(model.state_dict(), "weights/model.pth")
+        torch.save(model.state_dict(), "weights/model.pth")
+
+
             # val_loss = 0
             # with torch.no_grad():
             #     for fen in val_fens2:

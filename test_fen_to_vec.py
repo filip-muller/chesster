@@ -8,6 +8,10 @@ class TestFenToVec(unittest.TestCase):
     starting_pieces = [fen_to_vec.ROOK, fen_to_vec.KNIGHT, fen_to_vec.BISHOP, fen_to_vec.QUEEN, fen_to_vec.KING, fen_to_vec.BISHOP, fen_to_vec.KNIGHT, fen_to_vec.ROOK]
     row_of_pawns = [fen_to_vec.PAWN] * 8
     empty_row = [fen_to_vec.EMPTY] * 8
+    onehot_king = [0, 0, 0, 0, 0, 1]
+    onehot_pawn = [1, 0, 0, 0, 0, 0]
+    onehot_to_move = [1, 0]
+    onehot_not_to_move = [0, 1]
 
     @staticmethod
     def _apply_color(pieces, color_val):
@@ -54,6 +58,48 @@ class TestFenToVec(unittest.TestCase):
 
         # castling
         expected += [fen_to_vec.CAN_CASTLE] * 2 + [fen_to_vec.CANNOT_CASTLE] + [fen_to_vec.CAN_CASTLE]
+
+        expected = torch.Tensor(expected)
+        self.assertTrue(torch.allclose(res, expected))
+
+    def test_onehot_simple(self):
+        fen = "k7/8/8/8/8/8/8/6K1 w KQkq - 0 1"
+        res = fen_to_vec.fen_to_onehot(fen)
+
+        expected = [self.onehot_king + self.onehot_not_to_move + [0]]
+        expected += [self.onehot_king + self.onehot_to_move + [62]]
+
+        expected = torch.Tensor(expected)
+        self.assertTrue(torch.allclose(res, expected))
+
+    def test_onehot_simplified(self):
+        fen = "k7/pppppppp/8/8/8/8/PPPPPPPP/6K1 w KQkq - 0 1"
+        res = fen_to_vec.fen_to_onehot(fen)
+
+        expected = [self.onehot_king + self.onehot_not_to_move + [0]]
+        white_pawn = self.onehot_pawn + self.onehot_not_to_move
+        expected += [white_pawn + [pos] for pos in range(8, 16)]
+
+        black_pawn = self.onehot_pawn + self.onehot_to_move
+        expected += [black_pawn + [pos] for pos in range(48, 56)]
+
+        expected += [self.onehot_king + self.onehot_to_move + [62]]
+
+        expected = torch.Tensor(expected)
+        self.assertTrue(torch.allclose(res, expected))
+
+    def test_onehot_simplified_black(self):
+        fen = "k7/pppppppp/8/8/8/8/PPPPPPPP/6K1 b KQkq - 0 1"
+        res = fen_to_vec.fen_to_onehot(fen)
+
+        expected = [self.onehot_king + self.onehot_to_move + [0]]
+        white_pawn = self.onehot_pawn + self.onehot_to_move
+        expected += [white_pawn + [pos] for pos in range(8, 16)]
+
+        black_pawn = self.onehot_pawn + self.onehot_not_to_move
+        expected += [black_pawn + [pos] for pos in range(48, 56)]
+
+        expected += [self.onehot_king + self.onehot_not_to_move + [62]]
 
         expected = torch.Tensor(expected)
         self.assertTrue(torch.allclose(res, expected))
